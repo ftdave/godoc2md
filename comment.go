@@ -35,9 +35,15 @@ var (
 	htmlAq   = []byte(`">`)
 	htmlEnda = []byte("</a>")
 
-	mdPre     = []byte("\t")
-	mdNewline = []byte("\n")
-	mdH3      = []byte("### ")
+	mdPre      = []byte("\t")
+	mdNewline  = []byte("\n")
+	mdH3       = []byte("### ")
+	mdPreStart = []byte("```go")
+	mdPreEnd   = []byte("```")
+
+	imgStart        = []byte("![]")
+	imgBracketLeft  = []byte("(")
+	imgBracketRight = []byte(")")
 )
 
 // Emphasize and escape a line of text for HTML. URLs are converted into links.
@@ -55,20 +61,36 @@ func emphasize(w io.Writer, line string) {
 		// analyze match
 		match := line[m[0]:m[1]]
 
+		isImg := false
+
 		// if URL then write as link
 		if m[2] >= 0 {
-			_, _ = w.Write(htmlA)
-			template.HTMLEscape(w, []byte(match))
-			_, _ = w.Write(htmlAq)
+			if strings.HasSuffix(match, ".png") ||
+				strings.HasSuffix(match, ".jpg") ||
+				strings.HasSuffix(match, ".jpeg") ||
+				strings.HasSuffix(match, ".gif") ||
+				strings.HasSuffix(match, ".svg") {
+				isImg = true
+				_, _ = w.Write(imgStart)
+				_, _ = w.Write(imgBracketLeft)
+				template.HTMLEscape(w, []byte(match))
+				_, _ = w.Write(imgBracketRight)
+			} else {
+				_, _ = w.Write(htmlA)
+				template.HTMLEscape(w, []byte(match))
+				_, _ = w.Write(htmlAq)
+			}
 		}
 
-		// write match
-		_, _ = w.Write([]byte(match))
+		if !isImg {
+			// write match
+			_, _ = w.Write([]byte(match))
 
-		if m[2] >= 0 {
-			_, _ = w.Write(htmlEnda)
+			if m[2] >= 0 {
+				_, _ = w.Write(htmlEnda)
+			}
+
 		}
-
 		// advance
 		line = line[m[1]:]
 	}
@@ -213,10 +235,19 @@ func ToMD(w io.Writer, text string) {
 			_, _ = w.Write(mdNewline)
 		case opPre:
 			_, _ = w.Write(mdNewline)
+			_, _ = w.Write(mdPreStart)
+			_, _ = w.Write(mdNewline)
 			for _, line := range b.lines {
-				_, _ = w.Write(mdPre)
 				emphasize(w, line)
 			}
+			if len(b.lines) > 0 {
+				if !strings.HasSuffix(b.lines[len(b.lines)-1], "\n") {
+					_, _ = w.Write(mdNewline)
+				}
+			} else {
+				_, _ = w.Write(mdNewline)
+			}
+			_, _ = w.Write(mdPreEnd)
 			_, _ = w.Write(mdNewline)
 		}
 	}
